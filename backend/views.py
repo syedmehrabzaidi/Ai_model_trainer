@@ -96,12 +96,6 @@ def signup_view(request):
             if not name or not email or not password:
                 return JsonResponse({'error': 'Name, email, and password are required.'}, status=400)
 
-            # MONGO_DB = MongoClient("mongodb+srv://syedmehrab:admin123@cluster0.qyxmn12.mongodb.net/test?retryWrites=true&w=majority&ssl=true")
-            # db = MONGO_DB['user']  # your database name
-
-            # collection = db['users']  # Correctly accessing the 'users' collection
-
-
             collection = settings.MONGO_DB['users']
             # collection = MONGO_DB['users']
 
