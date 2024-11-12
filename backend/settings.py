@@ -42,6 +42,9 @@ INSTALLED_APPS = [
 
     'rest_framework',
     'rest_framework_simplejwt',
+    'backend',
+    'channels',
+    'chat'
 
 ]
 
@@ -56,10 +59,33 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # React app origin
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:3000",  # React app origin
+#     "http://localhost",
+#     "http://127.0.0.1",
+# ]
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
 ]
 
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+ASGI_APPLICATION = 'chat.asgi.application'
 
 PUBLITIO_API_KEY = config('PUBLITIO_API_KEY', default='api key')
 PUBLITIO_API_SECRET = config('PUBLITIO_API_SECRET', default='api secret')
@@ -83,6 +109,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend.wsgi.application'
 
+# Channels layer backend configuration
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
+
 from pymongo import MongoClient
 
 # Database - Using pymongo with MongoDB
@@ -90,9 +123,6 @@ from pymongo import MongoClient
 MONGO_DB_NAME = config('MONGO_DB_NAME')
 MONGO_URI = config('MONGO_URI')
 
-# from pymongo import MongoClient
-# MONGO_DB = MongoClient("mongodb+srv://datauser:DwEUuX1U4O2CkFvH@cluster0.wmpao.mongodb.net/mydatabase?retryWrites=true&w=majority")
-# db = client['dev']  # your database name
 
 # Create a MongoClient to connect to MongoDB
 # MONGO_CLIENT = pymongo.MongoClient(MONGO_URI,  serverSelectionTimeoutMS=50000 )
@@ -112,28 +142,18 @@ from datetime import timedelta
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'backend.authentication.CustomJWTAuthentication',
     ),
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),  # Token will expire in 24 hours
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),   # Optional: You can also have refresh tokens last for a week
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=99999),  # Token will expire in 24 hours
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=99999),   # Optional: You can also have refresh tokens last for a week
 }
 
 #email
 SENDGRID_SECRET_KEY = config('SENDGRID_SECRET_KEY')
 SENDER_EMAIL = config('SENDER_EMAIL')
-
-key = "api1"
-#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
-
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.sendgrid.net'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = key  # Use 'apikey' as the username
-EMAIL_HOST_PASSWORD = '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'  # Use the API key you generated
-DEFAULT_FROM_EMAIL = 'syedmehrab2288@gmail.com'
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
