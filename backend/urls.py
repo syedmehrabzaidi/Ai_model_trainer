@@ -16,11 +16,17 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from .views import signup_view, login_view, edit_profile_view, upload_video_view, delete_video_view, get_videos_view, payment_view, reset_password
+from .views import ( signup_view, login_view, edit_profile_view, upload_video_view, delete_video_view, get_videos_view, reset_password,
+                     PaymentView, SubscribedDashboardView, upload_video_view, MemberListView, ClientRequestView, ModelTrainingView,
+                     AiModelView
+                    )        
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+
+from django.urls import re_path
+# from ..chat import consumers
 
 urlpatterns = [
     path('signup/', signup_view, name='signup_view'),
@@ -28,14 +34,24 @@ urlpatterns = [
     # path('logout/', logout_view, name='logout_view'),
     # path('check-auth/', check_auth_view, name='check_auth_view'),
     path('edit-profile/', edit_profile_view, name='edit_profile_view'),
-    path('upload-video/', upload_video_view, name='upload_video'),
+    path('uploadvideo/', upload_video_view.as_view(), name='upload_video'),
     path('delete-video/', delete_video_view, name='delete_video'),
     path('get-videos/', get_videos_view, name='get_videos'),
     path('admin/', admin.site.urls),
 
-    path('payment/', payment_view, name='payment_view'),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('forget/', reset_password, name='reset-password'),
 
+    path('payment/', PaymentView.as_view(), name='payment_view'),
+    path('sub_dashboard/', SubscribedDashboardView.as_view(), name='sub-dashboard'),
+    path('members/', MemberListView.as_view(), name='member-list'),
+    path('client_request/', ClientRequestView.as_view(), name='client-request'),
+    path('model_training/', ModelTrainingView.as_view(), name='model-training'),
+    path('ai_model_list/', AiModelView.as_view(), name='ai-model-list'),
+   
+
 ]
+# websocket_urlpatterns = [
+#     re_path(r'ws/chat/(?P<room_name>\w+)/$', consumers.ChatConsumer.as_asgi()),
+# ]
