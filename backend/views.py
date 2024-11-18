@@ -25,7 +25,15 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
+from django.core.mail import send_mail
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+
 stripe.api_key = settings.STRIPE_SECRET_KEY
+sendgrid_key = settings.SENDGRID_SECRET_KEY
+sender_email = settings.SENDER_EMAIL
+
+
 
 
 # MONGO_DB_NAME = config('MONGO_DB_NAME')
@@ -77,7 +85,8 @@ def login_view(request):
 @csrf_exempt
 def signup_view(request):
     if request.method == 'POST':
-        try:
+        # try:
+        if True:
             data = json.loads(request.body)
             name = data.get('name')
             email = data.get('email')
@@ -116,8 +125,8 @@ def signup_view(request):
 
             return response
 
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
+        # except Exception as e:
+        #     return JsonResponse({'error': str(e)}, status=500)
 
     return JsonResponse({'error': 'Invalid request method'}, status=405)
 
@@ -344,3 +353,42 @@ def subscription_view(request):
         'message': 'This is a protected view accessible only to authenticated users.',
         'user': request.user.username
     })
+
+
+@csrf_exempt
+def reset_password(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        email = data.get('email')
+
+        if not email:
+            return JsonResponse({'error': 'Email is required.'}, status=400)
+
+        # Access the 'users' collection
+        collection = settings.MONGO_DB['users']
+
+        user = collection.find_one({},{'email': email, "password": 2})
+        if not user:
+            return JsonResponse({'error': 'No user found with this email.'}, status=404)
+
+        # Extract the user's password
+        user_password = user['password']
+
+        message = Mail(
+            from_email= sender_email,
+            to_emails=[email],
+            subject='Password Reset',
+            html_content = '<strong>Your password is: {}</strong>'.format(user_password)
+        )
+        try:
+            sg = SendGridAPIClient(sendgrid_key)
+            response = sg.send(message)
+            print("status_code--------------",response.status_code)
+            print("body--------------",response.body)
+            print("headers--------------",response.headers)
+
+            return JsonResponse({'message': 'Password has been sent to your email.'}, status=200)
+        except Exception as e:
+            return JsonResponse({'error': f'Failed to send email: {str(e)}'}, status=500)
+
+    return JsonResponse({'error': 'Invalid request method'}, status=405)

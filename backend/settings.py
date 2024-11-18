@@ -120,6 +120,20 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),   # Optional: You can also have refresh tokens last for a week
 }
 
+#email
+SENDGRID_SECRET_KEY = config('SENDGRID_SECRET_KEY')
+SENDER_EMAIL = config('SENDER_EMAIL')
+
+key = "api1"
+#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
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.sendgrid.net'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = key  # Use 'apikey' as the username
+EMAIL_HOST_PASSWORD = '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'  # Use the API key you generated
+DEFAULT_FROM_EMAIL = 'syedmehrab2288@gmail.com'
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
