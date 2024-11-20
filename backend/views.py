@@ -52,6 +52,8 @@ sender_email = settings.SENDER_EMAIL
 
 @csrf_exempt
 def login_view(request):
+    print("------req---------------------------",request.method)
+
     if request.method == 'POST':
         # try:
         if True:    
