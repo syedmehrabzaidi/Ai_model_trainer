@@ -54,7 +54,14 @@ sender_email = settings.SENDER_EMAIL
 def login_view(request):
     print("------req---------------------------",request.method)
 
-    if request.method == 'POST':
+    if request.method == 'OPTIONS':
+        response = JsonResponse({})
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response
+    elif request.method == 'POST':        # try:
+    
         # try:
         if True:    
             data = json.loads(request.body)
