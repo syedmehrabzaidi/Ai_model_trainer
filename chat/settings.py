@@ -1,9 +1,10 @@
 # chat_project/settings.py
 
 INSTALLED_APPS = [
-    ...
+    'django.contrib.contenttypes',
     'channels',
     'chat',
+    'django.contrib.auth',
 ]
 
 ASGI_APPLICATION = 'chat.asgi.application'

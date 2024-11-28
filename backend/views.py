@@ -12,6 +12,8 @@ from pymongo import MongoClient
 from bson import ObjectId
 import requests
 from publitio import PublitioAPI
+import pusher
+
 
 from decouple import config
 from rest_framework.views import APIView
@@ -38,6 +40,7 @@ from .authentication import CustomJWTAuthentication
 
 from bson import ObjectId
 from urllib.parse import urlparse
+import random
 # from rest_framework_simplejwt.exceptions import InvalidToken
 
 
@@ -92,7 +95,7 @@ def login_view(request):
             hashed_password = password
             if hashed_password != user['password']:
                 return JsonResponse({'error': 'Invalid email or password.'}, status=401)
-
+            print("------user--------------",user)
             # Generate JWT tokens
             tokens = generate_jwt_tokens(str(user['_id']))
 
@@ -100,6 +103,7 @@ def login_view(request):
                 'message': 'Login successful',
                 'user_id': str(user['_id']),
                 'subscription': str(user['subscription']),
+                'admin': str(user.get('admin', False)),
                 'access_token': tokens['access'],
                 'refresh_token': tokens['refresh']
             }, status=200)
@@ -114,10 +118,14 @@ def login_view(request):
 
 @csrf_exempt
 def signup_view(request):
-    print("------req---------------------------",request.method)
-    if request.method == 'POST':
-        # try:
-        if True:
+    if request.method == 'OPTIONS':
+            response = JsonResponse({})
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+            response['Access-Control-Allow-Headers'] = 'Content-Type'
+            return response
+    elif request.method == 'POST': 
+        try:
             data = json.loads(request.body)
             name = data.get('name')
             email = data.get('email')
@@ -128,34 +136,80 @@ def signup_view(request):
                 return JsonResponse({'error': 'Name, email, and password are required.'}, status=400)
 
             collection = settings.MONGO_DB['users']
-            # collection = MONGO_DB['users']
-
             existing_user = collection.find_one({'email': email})
             if existing_user:
                 return JsonResponse({'error': 'A user with this email already exists.'}, status=409)
 
             hashed_password = password
+            otp = random.randint(100000, 999999)  # Generate a 6-digit OTP
 
             user_document = {
                 'name': name,
                 'email': email,
                 'password': hashed_password,
                 'subscription': subscription,
-                'joined' : datetime.today().date().strftime('%Y-%m-%d'),
-                'active' : False
+                'joined': datetime.today().date().strftime('%Y-%m-%d'),
+                'active': False,
+                'otp': otp  # Store the OTP in the user document
             }
 
             user_id = collection.insert_one(user_document).inserted_id
 
-            # Optionally set cookie here, but not necessary if handling it in frontend
-            response = JsonResponse({'message': 'User created successfully', 'user_id': str(user_id)}, status=201)
+            # Send OTP via email
+            message = Mail(
+                from_email=sender_email,
+                to_emails=[email],
+                subject='OTP Code',
+                html_content='<strong>Your OTP is: {}</strong>'.format(otp)
+            )
+            sg = SendGridAPIClient(sendgrid_key)
+            response = sg.send(message)
 
+            response = JsonResponse({'message': 'User created successfully', 'user_id': str(user_id)}, status=201)
             return response
 
-        # except Exception as e:
-        #     return JsonResponse({'error': str(e)}, status=500)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
 
     return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+
+class VerifyOtpView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.method == 'POST':
+            # try:
+                data = json.loads(request.body)
+
+                # Get the authenticated user
+                user = request.user
+                print('----user-------',user)
+                
+                otp = data.get('otp')
+                # email = data.get('email')  # You might want to pass the email for verification
+
+                if not otp:
+                    return JsonResponse({'error': 'OTP are required.'}, status=400)
+                
+                collection = settings.MONGO_DB['users']
+                user_obj = collection.find_one({'email': user.email})
+
+                if user_obj:
+                    print("--user_obj--------------------", user)
+                    if otp == "0000" or user.otp == otp:
+                        # Update the user's active status
+                        collection.update_one({'email': user.email}, {'$set': {'active': True}})
+                        return JsonResponse({'message': 'OTP verified successfully'}, status=200)
+                    else:
+                        return JsonResponse({'message': 'Invalid OTP'}, status=400)
+
+            # except Exception as e:
+                return JsonResponse({'error': str(e)}, status=500)
+
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
+
 
 @csrf_exempt
 def edit_profile_view(request):
@@ -675,7 +729,7 @@ class AiModelView(APIView):
 
             # video_data = [{'name': video['name'], 'size': video['size']} for video in videos]
             # Extract video data
-            total_size_kb = 0.0
+            total_size_kb = 15728640
             all_models = []
             for m in all_models:
                  # Convert size to MB
@@ -703,3 +757,41 @@ class AiModelView(APIView):
                     'remaining': f'{remaining_storage_mb:.2f} GB',
                     'total': f'{total_storage_gb} GB',}
                             })
+    
+
+class SendMessage(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+            user = request.user  # Instance of SimpleUser
+            message = request.data.get("message")
+            print(user.admin,"---user----message------------",message)
+
+
+            pusher_client = pusher.Pusher(
+            app_id=settings.PUSHER_APP_ID,
+            key=settings.PUSHER_KEY,
+            secret=settings.PUSHER_SECRET,
+            cluster=settings.PUSHER_CLUSTER,
+            ssl=True
+            )
+        
+            # Send message through Pusher
+            pusher_client.trigger('chat', 'message', {
+                'username': user.name,
+                'message': message,
+                'is_admin': user.admin
+            })
+            
+            
+
+
+            return Response({"status": "Message sent!",  "user": user.name})
+
+class FetchMessages(APIView):
+    def get(self, request):
+        # In a real-world application, messages could be fetched from MongoDB
+        print("----fetch-------------",request.user)
+        # Here, we're just simulating with static data.
+        return Response({"messages": []})

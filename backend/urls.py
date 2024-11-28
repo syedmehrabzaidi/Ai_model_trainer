@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import path
 from .views import ( signup_view, login_view, edit_profile_view, upload_video_view, delete_video_view, get_videos_view, reset_password,
                      PaymentView, SubscribedDashboardView, upload_video_view, MemberListView, ClientRequestView, ModelTrainingView,
-                     AiModelView
+                     AiModelView, SendMessage, FetchMessages, VerifyOtpView
                     )        
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -49,6 +49,12 @@ urlpatterns = [
     path('client_request/', ClientRequestView.as_view(), name='client-request'),
     path('model_training/', ModelTrainingView.as_view(), name='model-training'),
     path('ai_model_list/', AiModelView.as_view(), name='ai-model-list'),
+
+    
+    path('send-message/', SendMessage.as_view(), name='send_message'),
+    path('fetch-messages/', FetchMessages.as_view(), name='fetch_messages'),
+    path('otp/', VerifyOtpView.as_view(), name='otp'),
+
    
 
 ]
