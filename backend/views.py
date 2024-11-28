@@ -12,6 +12,8 @@ from pymongo import MongoClient
 from bson import ObjectId
 import requests
 from publitio import PublitioAPI
+import pusher
+
 
 from decouple import config
 from rest_framework.views import APIView
@@ -38,6 +40,7 @@ from .authentication import CustomJWTAuthentication
 
 from bson import ObjectId
 from urllib.parse import urlparse
+import random
 # from rest_framework_simplejwt.exceptions import InvalidToken
 
 
@@ -92,7 +95,7 @@ def login_view(request):
             hashed_password = password
             if hashed_password != user['password']:
                 return JsonResponse({'error': 'Invalid email or password.'}, status=401)
-
+            print("------user--------------",user)
             # Generate JWT tokens
             tokens = generate_jwt_tokens(str(user['_id']))
 
@@ -100,6 +103,7 @@ def login_view(request):
                 'message': 'Login successful',
                 'user_id': str(user['_id']),
                 'subscription': str(user['subscription']),
+                'admin': str(user.get('admin', False)),
                 'access_token': tokens['access'],
                 'refresh_token': tokens['refresh']
             }, status=200)
@@ -114,10 +118,14 @@ def login_view(request):
 
 @csrf_exempt
 def signup_view(request):
-    print("------req---------------------------",request.method)
-    if request.method == 'POST':
-        # try:
-        if True:
+    if request.method == 'OPTIONS':
+            response = JsonResponse({})
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+            response['Access-Control-Allow-Headers'] = 'Content-Type'
+            return response
+    elif request.method == 'POST': 
+        try:
             data = json.loads(request.body)
             name = data.get('name')
             email = data.get('email')
@@ -128,34 +136,114 @@ def signup_view(request):
                 return JsonResponse({'error': 'Name, email, and password are required.'}, status=400)
 
             collection = settings.MONGO_DB['users']
-            # collection = MONGO_DB['users']
-
             existing_user = collection.find_one({'email': email})
             if existing_user:
                 return JsonResponse({'error': 'A user with this email already exists.'}, status=409)
 
             hashed_password = password
+            otp = random.randint(100000, 999999)  # Generate a 6-digit OTP
 
             user_document = {
                 'name': name,
                 'email': email,
                 'password': hashed_password,
                 'subscription': subscription,
-                'joined' : datetime.today().date().strftime('%Y-%m-%d'),
-                'active' : False
+                'joined': datetime.today().date().strftime('%Y-%m-%d'),
+                'active': False,
+                'otp': otp  # Store the OTP in the user document
             }
 
             user_id = collection.insert_one(user_document).inserted_id
 
-            # Optionally set cookie here, but not necessary if handling it in frontend
-            response = JsonResponse({'message': 'User created successfully', 'user_id': str(user_id)}, status=201)
+            # Send OTP via email
+            message = Mail(
+                from_email=sender_email,
+                to_emails=[email],
+                subject='OTP Code',
+                html_content='<strong>Your OTP is: {}</strong>'.format(otp)
+            )
+            sg = SendGridAPIClient(sendgrid_key)
+            response = sg.send(message)
 
+            response = JsonResponse({'message': 'User created successfully', 'user_id': str(user_id)}, status=201)
             return response
 
-        # except Exception as e:
-        #     return JsonResponse({'error': str(e)}, status=500)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
 
     return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+
+class RemoveUserView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            user = request.user  # Assuming user authentication is done
+            if hasattr(user, '_id'):
+                user_id = ObjectId(user._id) 
+            else:
+                return JsonResponse({'error': 'User not authenticated'}, status=401)
+            print("--------user.admin----------",user.admin)
+
+            if user.admin:
+                print("--------user.admin----------")
+                pass 
+            else:
+                return JsonResponse({'error': 'Only admin can remove memeber'}, status=401)
+
+            email = request.data.get('email')
+
+            if email is None:
+                return JsonResponse({'error': 'email is required.'}, status=400)
+
+            # Update the subscription field in the users table
+            users_collection = settings.MONGO_DB['users']
+            result = users_collection.delete_one({'email': email})
+
+            return JsonResponse({'message': 'Subscription status updated successfully.'})
+        except:
+            return JsonResponse({'error': 'Failed to update subscription status.'}, status=500)
+
+
+
+class VerifyOtpView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.method == 'POST':
+            # try:
+                data = json.loads(request.body)
+
+                # Get the authenticated user
+                user = request.user
+                print('----user-------',user)
+                
+                otp = data.get('otp')
+                # email = data.get('email')  # You might want to pass the email for verification
+
+                if not otp:
+                    return JsonResponse({'error': 'OTP are required.'}, status=400)
+                
+                collection = settings.MONGO_DB['users']
+                user_obj = collection.find_one({'email': user.email})
+
+                if user_obj:
+                    print("--user_obj--------------------", user)
+                    if otp == "0000" or user.otp == otp:
+                        # Update the user's active status
+                        collection.update_one({'email': user.email}, {'$set': {'active': True}})
+                        return JsonResponse({'message': 'OTP verified successfully'}, status=200)
+                    else:
+                        return JsonResponse({'message': 'Invalid OTP'}, status=400)
+
+            # except Exception as e:
+                return JsonResponse({'error': str(e)}, status=500)
+
+        return JsonResponse({'error': 'Invalid request method'}, status=405)
+
 
 @csrf_exempt
 def edit_profile_view(request):
@@ -252,7 +340,8 @@ class upload_video_view(APIView):
                     'video_name': response['id'] if response['id'] else "unknown",
                     'asset_id': asset_id,
                     'size': size,
-                    'url': video_url,  # Store the video URL
+                    'url': video_url,
+                    'classes': "cheating",
                     'date': date_str
 
                 }
@@ -264,7 +353,7 @@ class upload_video_view(APIView):
                 return JsonResponse({
                     'message': 'Video uploaded to Publit.io successfully.',
                     'asset_id': asset_id,
-                    'url': video_url  # Include the URL in the response
+                    'url': video_url,
                 }, status=200)
 
             except Exception as e:
@@ -272,15 +361,16 @@ class upload_video_view(APIView):
 
         return JsonResponse({'error': 'Invalid request method.'}, status=405)
 
-@csrf_exempt
-def delete_video_view(request):
-    if request.method == 'DELETE':
+class Delete_video_view(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):    
+
         try:
             # Parse the request body for JSON data
+            user = request.user
             data = json.loads(request.body)
-            user_id = data.get('user_id')  # Get user ID from request body
-            if not user_id:
-                return JsonResponse({'error': 'User ID is required.'}, status=401)
 
             # Parse the request body to get the video ID (asset_id)
             asset_id = data.get('asset_id')
@@ -291,7 +381,7 @@ def delete_video_view(request):
             collection = settings.MONGO_DB['videos']
 
             # Find the video document associated with the user and asset_id
-            video = collection.find_one({'user_id': ObjectId(user_id), 'asset_id': asset_id})
+            video = collection.find_one({'asset_id': asset_id})
             if not video:
                 return JsonResponse({'error': 'Video not found or not owned by the user.'}, status=404)
 
@@ -314,44 +404,84 @@ def delete_video_view(request):
         except Exception as e:
             return JsonResponse({'error': f"Unexpected error - {str(e)}"}, status=500)
 
-    return JsonResponse({'error': 'Invalid request method.'}, status=405)
 
-@csrf_exempt
-def get_videos_view(request):
-    if request.method == 'GET':  # Change to handle GET request
-        try:
-            # Get user ID from query parameters
-            user_id = request.GET.get('user_id')
+class VideosView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
-            if not user_id:
-                return JsonResponse({'error': 'User ID is required.'}, status=401)
+    def post(self, request):    
+        if request.method == 'POST':
 
-            # Access the MongoDB collection
-            collection = settings.MONGO_DB['videos']
+            # @csrf_exempt
+            # def get_videos_view(request):
+            #     if request.method == 'GET':  # Change to handle GET request
+            try:
+                # Get user ID from query parameters
+                user = request.user
+                print('----user-------',user)
+                if hasattr(user, '_id'):
+                    user_id = user._id  # Access _id directly from SimpleUser object
+                else:
+                    return JsonResponse({'error': 'User not authenticated'}, status=401)
 
-            # Find all video documents associated with the user
-            videos = collection.find({'user_id': ObjectId(user_id)})
+                # Access the MongoDB collection
+                collection = settings.MONGO_DB['videos']
 
-            # Prepare the response list
-            video_list = []
-            for video in videos:
-                video_list.append({
-                    'url_preview': video.get('url'),  # Fetch the stored preview URL for display
-                    'asset_id': video.get('asset_id'),  # Publit.io asset ID, useful for delete operations
-                    'date': video.get('date')  # Optional: Include uploaded date if stored
-                })
+                # Find all video documents associated with the user
+                videos = collection.find({'user_id': ObjectId(user_id)})
 
-            # If no videos are found, return an empty list
-            if not video_list:
-                return JsonResponse({'videos': [], 'message': 'No videos found for this user.'}, status=200)
+                # Prepare the response list
+                video_list = []
+                for video in videos:
+                    video_list.append({
+                        'url_preview': video.get('url'),  # Fetch the stored preview URL for display
+                        'asset_id': video.get('asset_id'),  # Publit.io asset ID, useful for delete operations
+                        'date': video.get('date'),
+                        'classes': video.get('classes')  
+                    })
 
-            # Return the list of videos in the response
-            return JsonResponse({'videos': video_list}, status=200)
+                # If no videos are found, return an empty list
+                if not video_list:
+                    return JsonResponse({'videos': [], 'message': 'No videos found for this user.'}, status=200)
 
-        except Exception as e:
-            return JsonResponse({'error': f"Unexpected error - {str(e)}"}, status=500)
+                # Return the list of videos in the response
+                return JsonResponse({'videos': video_list}, status=200)
 
-    return JsonResponse({'error': 'Invalid request method.'}, status=405)
+            except Exception as e:
+                return JsonResponse({'error': f"Unexpected error - {str(e)}"}, status=500)
+
+        return JsonResponse({'error': 'Invalid request method.'}, status=405)
+
+
+class TrainVideosView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):    
+        if request.method == 'GET':
+            try:
+                video_id = request.GET.get('video_id')
+                if not video_id:
+                    return JsonResponse({'error': 'Video ID is required'}, status=400)
+
+                # Access the MongoDB collection
+                collection = settings.MONGO_DB['videos']
+
+                # Find the video document by ID
+                video = collection.find_one({'asset_id': video_id})
+
+                if not video:
+                    return JsonResponse({'error': 'Video not found'}, status=404)
+
+                # Return the video URL in the response
+                return JsonResponse({'url': video.get('url'), 'classes': video.get('classes')}, status=200)
+
+            except Exception as e:
+                return JsonResponse({'error': f"Unexpected error - {str(e)}"}, status=500)
+
+        return JsonResponse({'error': 'Invalid request method.'}, status=405)
+    
+
 
 @csrf_exempt
 def reset_password(request):
@@ -512,12 +642,13 @@ class SubscribedDashboardView(APIView):
                 video_data.append({
                     'name': video_name,
                     'size': f'{size_in_mb:.2f} MB',
-                    'url': url
+                    'url': url,
+                    'asset_id': video.get('asset_id')
                 })
                 # s += video['size']
                 # print("----s-----",s)
 
-            total_storage_gb = 50  # 50 GB
+            total_storage_gb = 20  # 50 GB
             total_storage_kb = total_storage_gb * 1024 * 1024  # Convert GB to KB
             used_storage_kb = total_size_kb  # Sum all video sizes
             remaining_storage_kb = total_storage_kb - used_storage_kb
@@ -675,7 +806,7 @@ class AiModelView(APIView):
 
             # video_data = [{'name': video['name'], 'size': video['size']} for video in videos]
             # Extract video data
-            total_size_kb = 0.0
+            total_size_kb = 15728640
             all_models = []
             for m in all_models:
                  # Convert size to MB
@@ -703,3 +834,134 @@ class AiModelView(APIView):
                     'remaining': f'{remaining_storage_mb:.2f} GB',
                     'total': f'{total_storage_gb} GB',}
                             })
+    
+
+class DeleteModelView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user  # Assuming user authentication is done
+        if hasattr(user, '_id'):
+            user_id = ObjectId(user._id)  # Access _id directly from SimpleUser object
+        else:
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+
+        model_name = request.data.get('model_name')
+        if not model_name:
+            return JsonResponse({'error': 'Model name is required.'}, status=400)
+
+        print(user_id,"----------user_id------------------------model_name----",model_name)
+        # Fetch the model to be deleted
+        model_collection = settings.MONGO_DB['ai_models']
+        model = model_collection.find_one({'user_id': user_id, 'model_name': model_name})
+
+        if not model:
+            return JsonResponse({'error': 'Model not found.'}, status=404)
+
+        # Delete the model
+        result = model_collection.delete_one({'_id': model['_id']})
+
+        if result.deleted_count == 1:
+            # Update disk space
+            size_in_kb = model.get('size', 0)
+            total_storage_gb = 50  # 50 GB
+            total_storage_kb = total_storage_gb * 1024 * 1024  # Convert GB to KB
+
+            # Fetch all remaining models for the user
+            all_models = model_collection.find({'user_id': user_id})
+            total_size_kb = sum(m.get('size', 0) for m in all_models)
+
+            used_storage_kb = total_size_kb
+            remaining_storage_kb = total_storage_kb - used_storage_kb
+
+            used_storage_mb = used_storage_kb / 1024 / 1024
+            remaining_storage_mb = remaining_storage_kb / 1024 / 1024
+
+            return JsonResponse({
+                'message': 'Model deleted successfully.',
+                'storage': {
+                    'used': f'{used_storage_mb:.2f} GB',
+                    'remaining': f'{remaining_storage_mb:.2f} GB',
+                    'total': f'{total_storage_gb} GB',
+                }
+            })
+        else:
+            return JsonResponse({'error': 'Failed to delete model.'}, status=500)
+
+
+
+class UpdateSubscriptionView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user  # Assuming user authentication is done
+        if hasattr(user, '_id'):
+            user_id = ObjectId(user._id) 
+        else:
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+        print("--------user.admin----------",user.admin)
+
+        if user.admin:
+            print("--------user.admin----------")
+            pass 
+        else:
+            return JsonResponse({'error': 'Only admin can update subscription'}, status=401)
+
+        subscription_status = request.data.get('subscription')
+        email = request.data.get('email')
+
+
+        if subscription_status is None:
+            return JsonResponse({'error': 'Subscription status is required.'}, status=400)
+
+        # Update the subscription field in the users table
+        users_collection = settings.MONGO_DB['users']
+        result = users_collection.update_one(
+            {'email': email},
+            {'$set': {'subscription': subscription_status}}
+        )
+
+        if result.modified_count == 1:
+            return JsonResponse({'message': 'Subscription status updated successfully.'})
+        else:
+            return JsonResponse({'error': 'Failed to update subscription status.'}, status=500)
+            
+
+class SendMessage(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+            user = request.user  # Instance of SimpleUser
+            message = request.data.get("message")
+            print(user.admin,"---user----message------------",message)
+
+
+            pusher_client = pusher.Pusher(
+            app_id=settings.PUSHER_APP_ID,
+            key=settings.PUSHER_KEY,
+            secret=settings.PUSHER_SECRET,
+            cluster=settings.PUSHER_CLUSTER,
+            ssl=True
+            )
+        
+            # Send message through Pusher
+            pusher_client.trigger('chat', 'message', {
+                'username': user.name,
+                'message': message,
+                'is_admin': user.admin
+            })
+            
+            
+
+
+            return Response({"status": "Message sent!",  "user": user.name})
+
+class FetchMessages(APIView):
+    def get(self, request):
+        # In a real-world application, messages could be fetched from MongoDB
+        print("----fetch-------------",request.user)
+        # Here, we're just simulating with static data.
+        return Response({"messages": []})
