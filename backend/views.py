@@ -69,6 +69,7 @@ from urllib.parse import urlparse
 
 @csrf_exempt
 def login_view(request):
+
     if request.method == 'OPTIONS':
             response = JsonResponse({})
             response['Access-Control-Allow-Origin'] = '*'
@@ -76,6 +77,10 @@ def login_view(request):
             response['Access-Control-Allow-Headers'] = 'Content-Type'
             return response
     elif request.method == 'POST':        # try:
+
+    print("------req---------------------------",request.method)
+    elif request.method == 'POST':        # try:
+
         if True:    
             data = json.loads(request.body)
             email = data.get('email')
@@ -392,6 +397,7 @@ def reset_password(request):
 
     return JsonResponse({'error': 'Invalid request method'}, status=405)
 
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])  # Ensure the user is authenticated
 def subscription_view(request):
@@ -703,3 +709,4 @@ class AiModelView(APIView):
                     'remaining': f'{remaining_storage_mb:.2f} GB',
                     'total': f'{total_storage_gb} GB',}
                             })
+
