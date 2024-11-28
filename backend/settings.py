@@ -65,6 +65,7 @@ MIDDLEWARE = [
 #     "http://127.0.0.1",
 # ]
 CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -86,6 +87,11 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 ASGI_APPLICATION = 'chat.asgi.application'
+
+PUSHER_APP_ID = config("PUSHER_APP_ID")
+PUSHER_KEY = config("PUSHER_KEY")
+PUSHER_SECRET = config("PUSHER_SECRET")
+PUSHER_CLUSTER = config("PUSHER_CLUSTER")
 
 PUBLITIO_API_KEY = config('PUBLITIO_API_KEY', default='api key')
 PUBLITIO_API_SECRET = config('PUBLITIO_API_SECRET', default='api secret')

@@ -13,16 +13,17 @@ class SimpleUser:
     def __init__(self, user):
         self._id = user['_id']
         self.name = user['name']
-        self.admin = user.get('admin', False)
+        self.admin = user.get('admin', 'false').lower() == 'true'  # Convert to boolean
 
 class CustomJWTAuthentication:
     def get_validated_token(self, token):
-        try:
-            return jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
-        except jwt.ExpiredSignatureError:
-            raise jwt.InvalidTokenError("Token has expired")
-        except jwt.InvalidTokenError:
-            raise jwt.InvalidTokenError("Invalid token")
+        print("--consumer------get_validatedatoken-")
+        # try:
+        return jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+        # except jwt.ExpiredSignatureError:
+        #     raise jwt.InvalidTokenError("Token has expired")
+        # except jwt.InvalidTokenError:
+        #     raise jwt.InvalidTokenError("Invalid token")
 
     def get_user(self, validated_token):
         user_id = validated_token['user_id']
@@ -46,13 +47,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
         token = query_params.split('token=')[-1]
 
         # Authenticate user using CustomJWTAuthentication
+        # jwt_auth = CustomJWTAuthentication()
+        # from .auth1 import CustomJWTAuthentication
         jwt_auth = CustomJWTAuthentication()
+
         try:
             validated_token = jwt_auth.get_validated_token(token)
             self.user = jwt_auth.get_user(validated_token)
             self.user_name = self.user.name
             self.is_admin = self.user.admin
-            print(self.user_name,"------self.user_name-----------------------------self.is_admin-----------",self.is_admin)
         except jwt.InvalidTokenError:
             logger.error("Invalid token")
             await self.close()

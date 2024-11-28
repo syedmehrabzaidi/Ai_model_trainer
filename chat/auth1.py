@@ -12,9 +12,6 @@ class SimpleUser:
         self.name = user_data.get('name')
         self.email = user_data.get('email')
         self.subscription = user_data.get('subscription', False)
-        self.admin = user_data.get('admin', False)
-        self.otp = user_data.get('otp')
-
         self.is_authenticated = True  # Ensure this attribute is available
 
     def __str__(self):

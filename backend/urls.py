@@ -16,9 +16,9 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from .views import ( signup_view, login_view, edit_profile_view, upload_video_view, delete_video_view, get_videos_view, reset_password,
+from .views import ( signup_view, login_view, edit_profile_view, upload_video_view, VideosView, reset_password,
                      PaymentView, SubscribedDashboardView, upload_video_view, MemberListView, ClientRequestView, ModelTrainingView,
-                     AiModelView
+                     AiModelView, SendMessage, FetchMessages, VerifyOtpView, TrainVideosView, Delete_video_view
                     )        
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -35,8 +35,9 @@ urlpatterns = [
     # path('check-auth/', check_auth_view, name='check_auth_view'),
     path('edit-profile/', edit_profile_view, name='edit_profile_view'),
     path('uploadvideo/', upload_video_view.as_view(), name='upload_video'),
-    path('delete-video/', delete_video_view, name='delete_video'),
-    path('get-videos/', get_videos_view, name='get_videos'),
+    path('delete-video/', Delete_video_view.as_view(), name='delete_video'),
+    path('get_videos/', VideosView.as_view(), name='single-videos'),
+    path('trained_videos/', TrainVideosView.as_view(), name='trained-videos'),
     path('admin/', admin.site.urls),
 
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
@@ -49,6 +50,12 @@ urlpatterns = [
     path('client_request/', ClientRequestView.as_view(), name='client-request'),
     path('model_training/', ModelTrainingView.as_view(), name='model-training'),
     path('ai_model_list/', AiModelView.as_view(), name='ai-model-list'),
+
+    
+    path('send-message/', SendMessage.as_view(), name='send_message'),
+    path('fetch-messages/', FetchMessages.as_view(), name='fetch_messages'),
+    path('otp/', VerifyOtpView.as_view(), name='otp'),
+
    
 
 ]
