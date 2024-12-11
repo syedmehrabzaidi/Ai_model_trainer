@@ -643,7 +643,7 @@ class SubscribedDashboardView(APIView):
                     'name': video_name,
                     'size': f'{size_in_mb:.2f} MB',
                     'url': url,
-                    'asset_id': video.get('asset_id')
+                    'asset_id': video.get('asset_id', None)
                 })
                 # s += video['size']
                 # print("----s-----",s)
