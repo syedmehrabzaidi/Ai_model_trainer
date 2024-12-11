@@ -18,7 +18,12 @@ from django.contrib import admin
 from django.urls import path
 from .views import ( signup_view, login_view, edit_profile_view, upload_video_view, VideosView, reset_password,
                      PaymentView, SubscribedDashboardView, upload_video_view, MemberListView, ClientRequestView, ModelTrainingView,
+<<<<<<< HEAD
+                     AiModelView, SendMessage, FetchMessages, VerifyOtpView, TrainVideosView, Delete_video_view,
+                     UpdateSubscriptionView, RemoveUserView, DeleteModelView
+=======
                      AiModelView, SendMessage, FetchMessages, VerifyOtpView, TrainVideosView, Delete_video_view
+>>>>>>> e2b574d2e024a56cb18106e568609739d003a0b2
                     )        
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -54,7 +59,15 @@ urlpatterns = [
     
     path('send-message/', SendMessage.as_view(), name='send_message'),
     path('fetch-messages/', FetchMessages.as_view(), name='fetch_messages'),
+<<<<<<< HEAD
+
     path('otp/', VerifyOtpView.as_view(), name='otp'),
+    path('update_subscription/', UpdateSubscriptionView.as_view(), name='update-subscription'),
+    path('remove_user/', RemoveUserView.as_view(), name='remove_user'),
+    path('remove_model/', DeleteModelView.as_view(), name='remove-model'),
+=======
+    path('otp/', VerifyOtpView.as_view(), name='otp'),
+>>>>>>> e2b574d2e024a56cb18106e568609739d003a0b2
 
    
 

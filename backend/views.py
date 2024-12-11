@@ -174,6 +174,40 @@ def signup_view(request):
     return JsonResponse({'error': 'Invalid request method'}, status=405)
 
 
+class RemoveUserView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            user = request.user  # Assuming user authentication is done
+            if hasattr(user, '_id'):
+                user_id = ObjectId(user._id) 
+            else:
+                return JsonResponse({'error': 'User not authenticated'}, status=401)
+            print("--------user.admin----------",user.admin)
+
+            if user.admin:
+                print("--------user.admin----------")
+                pass 
+            else:
+                return JsonResponse({'error': 'Only admin can remove memeber'}, status=401)
+
+            email = request.data.get('email')
+
+            if email is None:
+                return JsonResponse({'error': 'email is required.'}, status=400)
+
+            # Update the subscription field in the users table
+            users_collection = settings.MONGO_DB['users']
+            result = users_collection.delete_one({'email': email})
+
+            return JsonResponse({'message': 'Subscription status updated successfully.'})
+        except:
+            return JsonResponse({'error': 'Failed to update subscription status.'}, status=500)
+
+
+
 class VerifyOtpView(APIView):
     authentication_classes = [CustomJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -801,6 +835,99 @@ class AiModelView(APIView):
                     'total': f'{total_storage_gb} GB',}
                             })
     
+
+class DeleteModelView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user  # Assuming user authentication is done
+        if hasattr(user, '_id'):
+            user_id = ObjectId(user._id)  # Access _id directly from SimpleUser object
+        else:
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+
+        model_name = request.data.get('model_name')
+        if not model_name:
+            return JsonResponse({'error': 'Model name is required.'}, status=400)
+
+        print(user_id,"----------user_id------------------------model_name----",model_name)
+        # Fetch the model to be deleted
+        model_collection = settings.MONGO_DB['ai_models']
+        model = model_collection.find_one({'user_id': user_id, 'model_name': model_name})
+
+        if not model:
+            return JsonResponse({'error': 'Model not found.'}, status=404)
+
+        # Delete the model
+        result = model_collection.delete_one({'_id': model['_id']})
+
+        if result.deleted_count == 1:
+            # Update disk space
+            size_in_kb = model.get('size', 0)
+            total_storage_gb = 50  # 50 GB
+            total_storage_kb = total_storage_gb * 1024 * 1024  # Convert GB to KB
+
+            # Fetch all remaining models for the user
+            all_models = model_collection.find({'user_id': user_id})
+            total_size_kb = sum(m.get('size', 0) for m in all_models)
+
+            used_storage_kb = total_size_kb
+            remaining_storage_kb = total_storage_kb - used_storage_kb
+
+            used_storage_mb = used_storage_kb / 1024 / 1024
+            remaining_storage_mb = remaining_storage_kb / 1024 / 1024
+
+            return JsonResponse({
+                'message': 'Model deleted successfully.',
+                'storage': {
+                    'used': f'{used_storage_mb:.2f} GB',
+                    'remaining': f'{remaining_storage_mb:.2f} GB',
+                    'total': f'{total_storage_gb} GB',
+                }
+            })
+        else:
+            return JsonResponse({'error': 'Failed to delete model.'}, status=500)
+
+
+
+class UpdateSubscriptionView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user  # Assuming user authentication is done
+        if hasattr(user, '_id'):
+            user_id = ObjectId(user._id) 
+        else:
+            return JsonResponse({'error': 'User not authenticated'}, status=401)
+        print("--------user.admin----------",user.admin)
+
+        if user.admin:
+            print("--------user.admin----------")
+            pass 
+        else:
+            return JsonResponse({'error': 'Only admin can update subscription'}, status=401)
+
+        subscription_status = request.data.get('subscription')
+        email = request.data.get('email')
+
+
+        if subscription_status is None:
+            return JsonResponse({'error': 'Subscription status is required.'}, status=400)
+
+        # Update the subscription field in the users table
+        users_collection = settings.MONGO_DB['users']
+        result = users_collection.update_one(
+            {'email': email},
+            {'$set': {'subscription': subscription_status}}
+        )
+
+        if result.modified_count == 1:
+            return JsonResponse({'message': 'Subscription status updated successfully.'})
+        else:
+            return JsonResponse({'error': 'Failed to update subscription status.'}, status=500)
+            
 
 class SendMessage(APIView):
     authentication_classes = [CustomJWTAuthentication]
