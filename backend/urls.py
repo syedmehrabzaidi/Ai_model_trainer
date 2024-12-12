@@ -19,7 +19,7 @@ from django.urls import path
 from .views import ( signup_view, login_view, edit_profile_view, upload_video_view, VideosView, reset_password,
                      PaymentView, SubscribedDashboardView, upload_video_view, MemberListView, ClientRequestView, ModelTrainingView,
                      AiModelView, SendMessage, FetchMessages, VerifyOtpView, TrainVideosView, Delete_video_view,
-                     UpdateSubscriptionView, RemoveUserView, DeleteModelView
+                     UpdateSubscriptionView, RemoveUserView, DeleteModelView, CheckSubView
                     )        
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -58,8 +58,12 @@ urlpatterns = [
 
     path('otp/', VerifyOtpView.as_view(), name='otp'),
     path('update_subscription/', UpdateSubscriptionView.as_view(), name='update-subscription'),
+    
     path('remove_user/', RemoveUserView.as_view(), name='remove_user'),
     path('remove_model/', DeleteModelView.as_view(), name='remove-model'),
+
+    path('check_subscription/', CheckSubView.as_view(), name='check-subscription'),
+
 
    
 

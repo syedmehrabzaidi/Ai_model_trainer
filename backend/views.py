@@ -41,6 +41,8 @@ from .authentication import CustomJWTAuthentication
 from bson import ObjectId
 from urllib.parse import urlparse
 import random
+
+otp_store = 0
 # from rest_framework_simplejwt.exceptions import InvalidToken
 
 
@@ -132,6 +134,7 @@ def signup_view(request):
             password = data.get('password')
             subscription = data.get('subscription', False)
 
+            print("--1-----")
             if not name or not email or not password:
                 return JsonResponse({'error': 'Name, email, and password are required.'}, status=400)
 
@@ -139,9 +142,14 @@ def signup_view(request):
             existing_user = collection.find_one({'email': email})
             if existing_user:
                 return JsonResponse({'error': 'A user with this email already exists.'}, status=409)
+            print("--2-----")
 
             hashed_password = password
             otp = random.randint(100000, 999999)  # Generate a 6-digit OTP
+            print('------otp--',otp)
+            global otp_store
+            otp_store = otp
+            print("----otp_store---------",otp_store)
 
             user_document = {
                 'name': name,
@@ -154,16 +162,22 @@ def signup_view(request):
             }
 
             user_id = collection.insert_one(user_document).inserted_id
+            print("--3--user---",user_id)
 
             # Send OTP via email
-            message = Mail(
-                from_email=sender_email,
-                to_emails=[email],
-                subject='OTP Code',
-                html_content='<strong>Your OTP is: {}</strong>'.format(otp)
-            )
-            sg = SendGridAPIClient(sendgrid_key)
-            response = sg.send(message)
+            try:
+                message = Mail(
+                    from_email=sender_email,
+                    to_emails=[email],
+                    subject='OTP Code',
+                    html_content='<strong>Your OTP is: {}</strong>'.format(otp)
+                )
+                sg = SendGridAPIClient(sendgrid_key)
+                response = sg.send(message)
+                print("---email sended---res---------",response)
+            except:
+                print("----------------something went wrong in email server--------------------------------")
+                pass    
 
             response = JsonResponse({'message': 'User created successfully', 'user_id': str(user_id)}, status=201)
             return response
@@ -179,32 +193,34 @@ class RemoveUserView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        try:
-            user = request.user  # Assuming user authentication is done
-            if hasattr(user, '_id'):
-                user_id = ObjectId(user._id) 
-            else:
-                return JsonResponse({'error': 'User not authenticated'}, status=401)
-            print("--------user.admin----------",user.admin)
+        if request.method == 'POST':
+            try:
+                user = request.user  # Assuming user authentication is done
+                if hasattr(user, '_id'):
+                    user_id = ObjectId(user._id) 
+                else:
+                    return JsonResponse({'error': 'User not authenticated'}, status=401)
+                print("--------user.admin----------",user.admin)
 
-            if user.admin:
-                print("--------user.admin----------")
-                pass 
-            else:
-                return JsonResponse({'error': 'Only admin can remove memeber'}, status=401)
+                if user.admin:
+                    print("--------yes.admin----------")
+                    pass 
+                else:
+                    return JsonResponse({'error': 'Only admin can remove memeber'}, status=401)
 
-            email = request.data.get('email')
+                email = request.data.get('email', None)
+                print("-----------email---",email)
 
-            if email is None:
-                return JsonResponse({'error': 'email is required.'}, status=400)
+                if email is None:
+                    return JsonResponse({'error': 'email is required.'}, status=400)
 
-            # Update the subscription field in the users table
-            users_collection = settings.MONGO_DB['users']
-            result = users_collection.delete_one({'email': email})
+                # Update the subscription field in the users table
+                users_collection = settings.MONGO_DB['users']
+                result = users_collection.delete_one({'email': email})
 
-            return JsonResponse({'message': 'Subscription status updated successfully.'})
-        except:
-            return JsonResponse({'error': 'Failed to update subscription status.'}, status=500)
+                return JsonResponse({'message': 'User Deleted Successfully.'})
+            except:
+                return JsonResponse({'error': 'Failed to update subscription status.'}, status=500)
 
 
 
@@ -231,8 +247,10 @@ class VerifyOtpView(APIView):
                 user_obj = collection.find_one({'email': user.email})
 
                 if user_obj:
-                    print("--user_obj--------------------", user)
-                    if otp == "0000" or user.otp == otp:
+                    global otp_store
+                    print(otp_store,"-otp_store----user_obj--------------------", user)
+                    
+                    if otp == "0000" or user.otp == otp or otp == str(otp_store):
                         # Update the user's active status
                         collection.update_one({'email': user.email}, {'$set': {'active': True}})
                         return JsonResponse({'message': 'OTP verified successfully'}, status=200)
@@ -297,13 +315,15 @@ class upload_video_view(APIView):
 
     def post(self, request):    
         if request.method == 'POST':
+            print("-----start video uploading----")
             try:
                 # Check if a video file is included in the request
+                which_model = request.data.get('which_model', None)
                 if 'video_file' not in request.FILES:
+                    print("---video_file----")
                     return JsonResponse({'error': 'No video file provided.'}, status=400)
-
                 user = request.user
-                print('----user-------',user)
+                print(which_model,'---which_model----user-------',user)
                 if hasattr(user, '_id'):
                     user_id = user._id  # Access _id directly from SimpleUser object
                 else:
@@ -334,6 +354,24 @@ class upload_video_view(APIView):
                 # Store the Publit.io asset_id, video URL, and user ID in MongoDB
                 collection = settings.MONGO_DB['videos']
                 date_str = datetime.today().date().strftime('%Y-%m-%d')
+                classification_result = []
+                try:
+                    # Send the video file to the classify-ml API
+                    if which_model == "ml":
+                        classify_url = 'http://127.0.0.1:8000/classify-ml'
+                    else:
+                        classify_url = 'http://127.0.0.1:8000/classify-dl'
+                    
+                    print("----classify_url-------------",classify_url)
+                    files = {'video_file': video_file}
+                    classify_response = requests.post(classify_url, files=files)
+
+                    if classify_response.status_code != 200:
+                        return JsonResponse({'error': 'Failed to classify video.'}, status=500)
+
+                    classification_result = classify_response.json().get('classification', ["no cheating"])
+                except:
+                    pass
 
                 video_document = {
                     'user_id': ObjectId(user_id),  # Store the user ID as an ObjectId
@@ -341,7 +379,7 @@ class upload_video_view(APIView):
                     'asset_id': asset_id,
                     'size': size,
                     'url': video_url,
-                    'classes': "cheating",
+                    'classes': classification_result if classification_result else ["no cheating"],
                     'date': date_str
 
                 }
@@ -598,8 +636,10 @@ class SubscribedDashboardView(APIView):
     def get(self, request):
         user = request.user  # Assuming user authentication is done
         print("---user---------------",user)
+        model_names = {}
 
         if user and user.subscription:
+
             user_id=ObjectId(user._id)
             # Fetch all collections (models) in the database
             collections = settings.MONGO_DB['ai_models']
@@ -656,17 +696,19 @@ class SubscribedDashboardView(APIView):
             used_storage_mb = used_storage_kb / 1024 / 1024
             remaining_storage_mb = remaining_storage_kb / 1024 / 1024
 
-        return JsonResponse({
-            'models': list(model_names),
-            'cloud_storage': {
-                    'used': f'{used_storage_mb:.2f} GB',
-                    'remaining': f'{remaining_storage_mb:.2f} GB',
-                    'total': f'{total_storage_gb} GB',
-                            },
-            'videos': video_data,
-                            })
-        
+            return JsonResponse({
+                'models': list(model_names if model_names else ""),
+                'cloud_storage': {
+                        'used': f'{used_storage_mb:.2f} GB',
+                        'remaining': f'{remaining_storage_mb:.2f} GB',
+                        'total': f'{total_storage_gb} GB',
+                                },
+                'videos': video_data,
+                                })
+        return JsonResponse({'error' : "you are not subscribe user"}, status=400)
+            
 class MemberListView(APIView):
+
     # authentication_classes = [CustomJWTAuthentication]
     # permission_classes = [IsAuthenticated]
 
@@ -787,7 +829,7 @@ class AiModelView(APIView):
         user = request.user  # Assuming user authentication is done
         print("---user---------------",user)
 
-        if user and user.subscription:
+        if user:
             user_id=ObjectId(user._id)
             # Fetch all collections (models) in the database
             collections = settings.MONGO_DB['ai_models']
@@ -795,24 +837,30 @@ class AiModelView(APIView):
 
             models_cursor = collections.find({}, {'_id': 0, 'model_name': 1})  # Just fetch 'name' field, exclude _id
             models = models_cursor  # Convert cursor to list
-            model_names = {model['model_name'] for model in models if 'model_name' in model}  # Use set comprehension
-
-            print(ObjectId(user._id),"---model_names----",model_names)
+            # model_names = {model['model_name'] for model in models if 'model_name' in model}  # Use set comprehension
 
             # Fetch all videos for the user
             model_collection = settings.MONGO_DB['ai_models']
             all_models = model_collection.find({'user_id': ObjectId(user_id)})
             print("----all_models-------------------",all_models)
 
+            model_names = {model['model_name'] for model in all_models if 'model_name' in model}
+            print("-------model_names_2----------------",model_names)
+
             # video_data = [{'name': video['name'], 'size': video['size']} for video in videos]
             # Extract video data
-            total_size_kb = 15728640
-            all_models = []
+            all_models.rewind()
+            total_size_kb = 0
+            print("-------before loop-----------")
             for m in all_models:
+                print("-------after loop-----------")
                  # Convert size to MB
                 size_in_kb = m.get('size', 0)
+                size_in_kb = int(size_in_kb)
                 size_in_mb = size_in_kb / 1024
                 total_size_kb += size_in_kb
+
+                print(size_in_kb,"--size_in_kb---loop---total_size_kb--",total_size_kb)
 
                 # model_data.append({
                 #     'name': m.get('model_name'),
@@ -826,15 +874,17 @@ class AiModelView(APIView):
 
             used_storage_mb = used_storage_kb / 1024 / 1024
             remaining_storage_mb = remaining_storage_kb / 1024 / 1024
+            print("-----remaining_storage_mb--------------------",remaining_storage_kb)
 
-        return JsonResponse({
-            'models': list(model_names),
-            'storage': {
-                    'used': f'{used_storage_mb:.2f} GB',
-                    'remaining': f'{remaining_storage_mb:.2f} GB',
-                    'total': f'{total_storage_gb} GB',}
-                            })
-    
+            return JsonResponse({
+                'models': list(model_names),
+                'storage': {
+                        'used': f'{used_storage_mb:.2f} GB',
+                        'remaining': f'{remaining_storage_mb:.2f} GB',
+                        'total': f'{total_storage_gb} GB',}
+                                })
+        return JsonResponse({'error' : "you are not subscribe user"}, status=400)
+
 
 class DeleteModelView(APIView):
     authentication_classes = [CustomJWTAuthentication]
@@ -967,3 +1017,38 @@ class FetchMessages(APIView):
         print("----fetch-------------",request.user)
         # Here, we're just simulating with static data.
         return Response({"messages": []})
+    
+
+class CheckSubView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+
+    def get(self, request):
+        user = request.user  # Assuming user authentication is done
+        print("---user---------------",user)
+
+        if user and user.subscription:
+            user_id=ObjectId(user._id)
+            # Fetch all collections (models) in the database
+            collections = settings.MONGO_DB['users']
+            
+            
+            # if hasattr(user, '_id'):
+            #     user_id = ObjectId(user._id) 
+            # else:
+            #     return JsonResponse({'error': 'User not authenticated'}, status=401)
+            print(user,"---user-----user.subscription----------",user.subscription)
+
+            # if user.admin:
+            #     print("--------user.admin----------")
+            #     pass 
+            # else:
+            #     return JsonResponse({'error': 'Only admin can update subscription'}, status=401)
+
+            return JsonResponse({'message': 'User Subscribe', 'sub': 'true'}, status=200)
+
+        else:
+            return JsonResponse({'error': 'User is not Subscribe', 'sub': 'false'}, status=401)
+
+
+
+        
