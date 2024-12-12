@@ -897,11 +897,13 @@ class UpdateSubscriptionView(APIView):
 
     def post(self, request):
         user = request.user  # Assuming user authentication is done
+        print("--------user----------",user)
+
         if hasattr(user, '_id'):
             user_id = ObjectId(user._id) 
         else:
             return JsonResponse({'error': 'User not authenticated'}, status=401)
-        print("--------user.admin----------",user.admin)
+        print(user,"--------user.admin----------",user.admin)
 
         if user.admin:
             print("--------user.admin----------")
@@ -922,11 +924,11 @@ class UpdateSubscriptionView(APIView):
             {'email': email},
             {'$set': {'subscription': subscription_status}}
         )
-
-        if result.modified_count == 1:
-            return JsonResponse({'message': 'Subscription status updated successfully.'})
-        else:
-            return JsonResponse({'error': 'Failed to update subscription status.'}, status=500)
+        res = users_collection.find_one({'email': email},)
+        print("----res-----------------",res)
+        return JsonResponse({'message': 'Subscription status updated successfully.', 'subscription':res.get('subscription', None)})
+        # else:
+        #     return JsonResponse({'error': 'Failed to update subscription status.'}, status=500)
             
 
 class SendMessage(APIView):
