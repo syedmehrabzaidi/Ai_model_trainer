@@ -176,7 +176,6 @@ def signup_view(request):
                 response = sg.send(message)
                 print("---email sended---res---------",response)
             except:
-                print("----------------something went wrong in email server--------------------------------")
                 pass    
 
             response = JsonResponse({'message': 'User created successfully', 'user_id': str(user_id)}, status=201)
