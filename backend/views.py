@@ -1016,3 +1016,38 @@ class FetchMessages(APIView):
         print("----fetch-------------",request.user)
         # Here, we're just simulating with static data.
         return Response({"messages": []})
+    
+
+class CheckSubView(APIView):
+    authentication_classes = [CustomJWTAuthentication]
+
+    def get(self, request):
+        user = request.user  # Assuming user authentication is done
+        print("---user---------------",user)
+
+        if user and user.subscription:
+            user_id=ObjectId(user._id)
+            # Fetch all collections (models) in the database
+            collections = settings.MONGO_DB['users']
+            
+            
+            # if hasattr(user, '_id'):
+            #     user_id = ObjectId(user._id) 
+            # else:
+            #     return JsonResponse({'error': 'User not authenticated'}, status=401)
+            print(user,"---user-----user.subscription----------",user.subscription)
+
+            # if user.admin:
+            #     print("--------user.admin----------")
+            #     pass 
+            # else:
+            #     return JsonResponse({'error': 'Only admin can update subscription'}, status=401)
+
+            return JsonResponse({'message': 'User Subscribe', 'sub': 'true'}, status=200)
+
+        else:
+            return JsonResponse({'error': 'User is not Subscribe', 'sub': 'false'}, status=401)
+
+
+
+        
